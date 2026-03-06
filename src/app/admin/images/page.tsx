@@ -1,26 +1,22 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  toggleImagePublic,
-  toggleImageCommonUse,
-  deleteImage,
-} from "../actions";
+import { createImage, updateImage, deleteImage } from "../actions";
 import Link from "next/link";
-import { Search, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Trash2, Upload } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-
 const PAGE_SIZE = 20;
 
 export default async function ImagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; edit?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const query = params.q || "";
   const page = parseInt(params.page || "1");
+  const editId = params.edit || null;
+  const errorMsg = params.error || null;
   const offset = (page - 1) * PAGE_SIZE;
-
   const admin = createAdminClient();
 
   let q = admin
@@ -29,156 +25,126 @@ export default async function ImagesPage({
       "id, url, is_public, is_common_use, image_description, additional_context, created_datetime_utc, profiles(first_name, last_name, email)",
       { count: "exact" }
     );
-
-  if (query) {
-    q = q.or(
-      `image_description.ilike.%${query}%,additional_context.ilike.%${query}%`
-    );
-  }
+  if (query) q = q.or(`image_description.ilike.%${query}%,additional_context.ilike.%${query}%`);
 
   const { data: images, count } = await q
     .order("created_datetime_utc", { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
-
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE);
+
+  const editItem = editId ? images?.find((i) => i.id === editId) : null;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[#00ff41] text-lg font-bold tracking-wider glow-text">
-          IMAGE REGISTRY
-        </h1>
-        <p className="text-[#252525] text-[10px] mt-1">
-          {count ?? 0} images indexed
-        </p>
+        <h1 className="text-[#00ff41] text-lg font-bold tracking-wider glow-text">IMAGE REGISTRY</h1>
+        <p className="text-[#252525] text-[10px] mt-1">{count ?? 0} images indexed</p>
       </div>
+
+      {errorMsg && (
+        <div className="p-3 border border-[#ff0033]/30 bg-[#ff0033]/5 text-[#ff0033] text-xs">
+          Upload error: {decodeURIComponent(errorMsg)}
+        </div>
+      )}
+
+      {/* Upload form */}
+      <div className="terminal-card p-4">
+        <h2 className="text-[#00ff41] text-[10px] font-bold uppercase tracking-[0.15em] mb-3 flex items-center gap-2">
+          <Upload size={12} /> Upload New Image
+        </h2>
+        <form action={createImage} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-[#404040] text-[9px] uppercase tracking-wider mb-1">File</label>
+            <input type="file" name="file" accept="image/*" required className="input-terminal text-[11px] file:mr-2 file:bg-transparent file:border-0 file:text-[#00ff41] file:text-[10px]" />
+          </div>
+          <div>
+            <label className="block text-[#404040] text-[9px] uppercase tracking-wider mb-1">Context</label>
+            <input name="additional_context" className="input-terminal" placeholder="Optional context..." />
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-1.5 text-[11px] text-[#707070] cursor-pointer">
+              <input type="checkbox" name="is_public" className="accent-[#00ff41]" /> Public
+            </label>
+            <label className="flex items-center gap-1.5 text-[11px] text-[#707070] cursor-pointer">
+              <input type="checkbox" name="is_common_use" className="accent-[#00ff41]" /> Common Use
+            </label>
+          </div>
+          <button type="submit" className="btn-terminal !text-[#00ff41]">[UPLOAD]</button>
+        </form>
+      </div>
+
+      {/* Edit form */}
+      {editItem && (
+        <div className="terminal-card p-4">
+          <h2 className="text-[#00d4ff] text-[10px] font-bold uppercase tracking-[0.15em] mb-3">
+            Editing Image #{editItem.id.slice(0, 8)}...
+          </h2>
+          <form action={updateImage.bind(null, editItem.id)} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+              <label className="block text-[#404040] text-[9px] uppercase tracking-wider mb-1">Description</label>
+              <input name="image_description" defaultValue={editItem.image_description || ""} className="input-terminal" />
+            </div>
+            <div>
+              <label className="block text-[#404040] text-[9px] uppercase tracking-wider mb-1">Context</label>
+              <input name="additional_context" defaultValue={editItem.additional_context || ""} className="input-terminal" />
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1.5 text-[11px] text-[#707070] cursor-pointer">
+                <input type="checkbox" name="is_public" defaultChecked={editItem.is_public ?? false} className="accent-[#00ff41]" /> Public
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-[#707070] cursor-pointer">
+                <input type="checkbox" name="is_common_use" defaultChecked={editItem.is_common_use ?? false} className="accent-[#00ff41]" /> Common
+              </label>
+            </div>
+            <div className="flex gap-2 md:col-span-3">
+              <button type="submit" className="btn-terminal !text-[#00ff41]">[SAVE]</button>
+              <Link href="/admin/images" className="btn-terminal">[CANCEL]</Link>
+            </div>
+          </form>
+        </div>
+      )}
 
       <form method="GET" className="flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#303030]"
-          />
-          <input
-            name="q"
-            defaultValue={query}
-            placeholder="Search by description..."
-            className="input-terminal pl-9 py-2"
-          />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#303030]" />
+          <input name="q" defaultValue={query} placeholder="Search by description..." className="input-terminal pl-9 py-2" />
         </div>
-        <button type="submit" className="btn-terminal">
-          [SEARCH]
-        </button>
-        {query && (
-          <Link href="/admin/images" className="btn-terminal !text-[#505050]">
-            [CLEAR]
-          </Link>
-        )}
+        <button type="submit" className="btn-terminal">[SEARCH]</button>
+        {query && <Link href="/admin/images" className="btn-terminal !text-[#505050]">[CLEAR]</Link>}
       </form>
 
       <div className="terminal-card overflow-x-auto">
         <table className="table-admin">
           <thead>
-            <tr>
-              <th>Preview</th>
-              <th>Description</th>
-              <th>Uploaded By</th>
-              <th>Public</th>
-              <th>Common Use</th>
-              <th>Created</th>
-              <th>Actions</th>
-            </tr>
+            <tr><th>Preview</th><th>Description</th><th>Uploaded By</th><th>Public</th><th>Common</th><th>Created</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {images?.map((image) => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const profile = image.profiles as any;
               return (
-                <tr key={image.id}>
+                <tr key={image.id} className={editId === image.id ? "!bg-[#00d4ff]/5" : ""}>
                   <td>
                     {image.url ? (
-                      <img
-                        src={image.url}
-                        alt=""
-                        className="w-11 h-11 object-cover rounded border border-[#1a3a1a]"
-                      />
+                      <img src={image.url} alt="" className="w-11 h-11 object-cover rounded border border-[#1a3a1a]" />
                     ) : (
-                      <div className="w-11 h-11 bg-[#0a0a0a] border border-[#1a3a1a] rounded flex items-center justify-center text-[#2a2a2a] text-[8px]">
-                        N/A
-                      </div>
+                      <div className="w-11 h-11 bg-[#0a0a0a] border border-[#1a3a1a] rounded flex items-center justify-center text-[#2a2a2a] text-[8px]">N/A</div>
                     )}
                   </td>
                   <td className="max-w-[220px]">
-                    <p className="text-[#808080] truncate text-[11px]">
-                      {image.image_description ||
-                        image.additional_context ||
-                        "\u2014"}
-                    </p>
+                    <p className="text-[#808080] truncate text-[11px]">{image.image_description || image.additional_context || "\u2014"}</p>
                   </td>
                   <td className="text-[#505050] text-[10px] whitespace-nowrap">
-                    {profile
-                      ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
-                        profile.email
-                      : "\u2014"}
+                    {profile ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.email : "\u2014"}
                   </td>
-                  <td>
-                    <span
-                      className={image.is_public ? "badge-on" : "badge-off"}
-                    >
-                      {image.is_public ? "YES" : "NO"}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={
-                        image.is_common_use ? "badge-on" : "badge-off"
-                      }
-                    >
-                      {image.is_common_use ? "YES" : "NO"}
-                    </span>
-                  </td>
-                  <td className="text-[#404040] text-[10px] whitespace-nowrap">
-                    {new Date(
-                      image.created_datetime_utc
-                    ).toLocaleDateString()}
-                  </td>
+                  <td><span className={image.is_public ? "badge-on" : "badge-off"}>{image.is_public ? "YES" : "NO"}</span></td>
+                  <td><span className={image.is_common_use ? "badge-on" : "badge-off"}>{image.is_common_use ? "YES" : "NO"}</span></td>
+                  <td className="text-[#404040] text-[10px] whitespace-nowrap">{new Date(image.created_datetime_utc).toLocaleDateString()}</td>
                   <td>
                     <div className="flex gap-1.5">
-                      <form
-                        action={toggleImagePublic.bind(
-                          null,
-                          image.id,
-                          image.is_public ?? false
-                        )}
-                      >
-                        <button
-                          type="submit"
-                          className="btn-terminal text-[10px]"
-                        >
-                          {image.is_public ? "[-PUB]" : "[+PUB]"}
-                        </button>
-                      </form>
-                      <form
-                        action={toggleImageCommonUse.bind(
-                          null,
-                          image.id,
-                          image.is_common_use ?? false
-                        )}
-                      >
-                        <button
-                          type="submit"
-                          className="btn-terminal text-[10px]"
-                        >
-                          {image.is_common_use ? "[-COM]" : "[+COM]"}
-                        </button>
-                      </form>
+                      <Link href={`/admin/images?q=${query}&page=${page}&edit=${image.id}`} className="btn-terminal text-[10px]">[EDIT]</Link>
                       <form action={deleteImage.bind(null, image.id)}>
-                        <button
-                          type="submit"
-                          className="btn-terminal text-[10px] hover:!text-[#ff0033] hover:!border-[#ff0033]"
-                        >
-                          <Trash2 size={11} />
-                        </button>
+                        <button type="submit" className="btn-terminal text-[10px] hover:!text-[#ff0033] hover:!border-[#ff0033]"><Trash2 size={11} /></button>
                       </form>
                     </div>
                   </td>
@@ -186,11 +152,7 @@ export default async function ImagesPage({
               );
             })}
             {(!images || images.length === 0) && (
-              <tr>
-                <td colSpan={7} className="text-center text-[#1a3a1a] py-10">
-                  No images found
-                </td>
-              </tr>
+              <tr><td colSpan={7} className="text-center text-[#1a3a1a] py-10">No images found</td></tr>
             )}
           </tbody>
         </table>
@@ -198,26 +160,10 @@ export default async function ImagesPage({
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs">
-          <p className="text-[#303030]">
-            Page {page} of {totalPages}
-          </p>
+          <p className="text-[#303030]">Page {page} of {totalPages}</p>
           <div className="flex gap-2">
-            {page > 1 && (
-              <Link
-                href={`/admin/images?q=${query}&page=${page - 1}`}
-                className="btn-terminal flex items-center gap-1"
-              >
-                <ChevronLeft size={12} /> Prev
-              </Link>
-            )}
-            {page < totalPages && (
-              <Link
-                href={`/admin/images?q=${query}&page=${page + 1}`}
-                className="btn-terminal flex items-center gap-1"
-              >
-                Next <ChevronRight size={12} />
-              </Link>
-            )}
+            {page > 1 && <Link href={`/admin/images?q=${query}&page=${page - 1}`} className="btn-terminal flex items-center gap-1"><ChevronLeft size={12} /> Prev</Link>}
+            {page < totalPages && <Link href={`/admin/images?q=${query}&page=${page + 1}`} className="btn-terminal flex items-center gap-1">Next <ChevronRight size={12} /></Link>}
           </div>
         </div>
       )}
