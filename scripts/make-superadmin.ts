@@ -95,7 +95,7 @@ Requirements:
     .from("profiles")
     .update({
       is_superadmin: true,
-      modified_datetime_utc: new Date().toISOString(),
+      modified_by_user_id: profile.id,
     })
     .eq("id", profile.id);
 

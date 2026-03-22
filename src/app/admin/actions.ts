@@ -20,7 +20,7 @@ async function requireSuperAdmin() {
     .single();
   if (!profile?.is_superadmin) redirect("/login?error=unauthorized");
 
-  return admin;
+  return { admin, userId: user.id };
 }
 
 // ── Users ──────────────────────────────────────────────
@@ -29,12 +29,12 @@ export async function toggleUserSuperAdmin(
   profileId: string,
   currentValue: boolean
 ) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("profiles")
     .update({
       is_superadmin: !currentValue,
-      modified_datetime_utc: new Date().toISOString(),
+      modified_by_user_id: userId,
     })
     .eq("id", profileId);
   revalidatePath("/admin/users");
@@ -44,12 +44,12 @@ export async function toggleUserStudyStatus(
   profileId: string,
   currentValue: boolean
 ) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("profiles")
     .update({
       is_in_study: !currentValue,
-      modified_datetime_utc: new Date().toISOString(),
+      modified_by_user_id: userId,
     })
     .eq("id", profileId);
   revalidatePath("/admin/users");
@@ -58,7 +58,7 @@ export async function toggleUserStudyStatus(
 // ── Images ─────────────────────────────────────────────
 
 export async function createImage(formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   const file = formData.get("file") as File;
 
   if (!file || file.size === 0) {
@@ -88,6 +88,8 @@ export async function createImage(formData: FormData) {
       (formData.get("additional_context") as string) || null,
     is_public: formData.get("is_public") === "on",
     is_common_use: formData.get("is_common_use") === "on",
+    created_by_user_id: userId,
+    modified_by_user_id: userId,
   });
 
   revalidatePath("/admin/images");
@@ -95,7 +97,7 @@ export async function createImage(formData: FormData) {
 }
 
 export async function updateImage(imageId: string, formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("images")
     .update({
@@ -105,7 +107,7 @@ export async function updateImage(imageId: string, formData: FormData) {
         (formData.get("image_description") as string) || null,
       is_public: formData.get("is_public") === "on",
       is_common_use: formData.get("is_common_use") === "on",
-      modified_datetime_utc: new Date().toISOString(),
+      modified_by_user_id: userId,
     })
     .eq("id", imageId);
   revalidatePath("/admin/images");
@@ -113,7 +115,7 @@ export async function updateImage(imageId: string, formData: FormData) {
 }
 
 export async function deleteImage(imageId: string) {
-  const admin = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
   await admin.from("images").delete().eq("id", imageId);
   revalidatePath("/admin/images");
 }
@@ -121,7 +123,7 @@ export async function deleteImage(imageId: string) {
 // ── Caption Examples ───────────────────────────────────
 
 export async function createCaptionExample(formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   const imageId = formData.get("image_id") as string;
   await admin.from("caption_examples").insert({
     image_description: formData.get("image_description") as string,
@@ -129,6 +131,8 @@ export async function createCaptionExample(formData: FormData) {
     explanation: formData.get("explanation") as string,
     priority: parseInt(formData.get("priority") as string) || 0,
     image_id: imageId || null,
+    created_by_user_id: userId,
+    modified_by_user_id: userId,
   });
   revalidatePath("/admin/caption-examples");
   redirect("/admin/caption-examples");
@@ -138,7 +142,7 @@ export async function updateCaptionExample(
   id: number,
   formData: FormData
 ) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   const imageId = formData.get("image_id") as string;
   await admin
     .from("caption_examples")
@@ -148,7 +152,7 @@ export async function updateCaptionExample(
       explanation: formData.get("explanation") as string,
       priority: parseInt(formData.get("priority") as string) || 0,
       image_id: imageId || null,
-      modified_datetime_utc: new Date().toISOString(),
+      modified_by_user_id: userId,
     })
     .eq("id", id);
   revalidatePath("/admin/caption-examples");
@@ -156,7 +160,7 @@ export async function updateCaptionExample(
 }
 
 export async function deleteCaptionExample(id: number) {
-  const admin = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
   await admin.from("caption_examples").delete().eq("id", id);
   revalidatePath("/admin/caption-examples");
 }
@@ -164,11 +168,12 @@ export async function deleteCaptionExample(id: number) {
 // ── Humor Mix ──────────────────────────────────────────
 
 export async function updateHumorMix(id: number, formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("humor_flavor_mix")
     .update({
       caption_count: parseInt(formData.get("caption_count") as string) || 0,
+      modified_by_user_id: userId,
     })
     .eq("id", id);
   revalidatePath("/admin/humor-mix");
@@ -178,7 +183,7 @@ export async function updateHumorMix(id: number, formData: FormData) {
 // ── Terms ──────────────────────────────────────────────
 
 export async function createTerm(formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   const typeId = formData.get("term_type_id") as string;
   await admin.from("terms").insert({
     term: formData.get("term") as string,
@@ -186,13 +191,15 @@ export async function createTerm(formData: FormData) {
     example: formData.get("example") as string,
     priority: parseInt(formData.get("priority") as string) || 0,
     term_type_id: typeId ? parseInt(typeId) : null,
+    created_by_user_id: userId,
+    modified_by_user_id: userId,
   });
   revalidatePath("/admin/terms");
   redirect("/admin/terms");
 }
 
 export async function updateTerm(id: number, formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   const typeId = formData.get("term_type_id") as string;
   await admin
     .from("terms")
@@ -202,7 +209,7 @@ export async function updateTerm(id: number, formData: FormData) {
       example: formData.get("example") as string,
       priority: parseInt(formData.get("priority") as string) || 0,
       term_type_id: typeId ? parseInt(typeId) : null,
-      modified_datetime_utc: new Date().toISOString(),
+      modified_by_user_id: userId,
     })
     .eq("id", id);
   revalidatePath("/admin/terms");
@@ -210,7 +217,7 @@ export async function updateTerm(id: number, formData: FormData) {
 }
 
 export async function deleteTerm(id: number) {
-  const admin = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
   await admin.from("terms").delete().eq("id", id);
   revalidatePath("/admin/terms");
 }
@@ -218,19 +225,21 @@ export async function deleteTerm(id: number) {
 // ── LLM Models ─────────────────────────────────────────
 
 export async function createLlmModel(formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin.from("llm_models").insert({
     name: formData.get("name") as string,
     llm_provider_id: parseInt(formData.get("llm_provider_id") as string),
     provider_model_id: formData.get("provider_model_id") as string,
     is_temperature_supported: formData.get("is_temperature_supported") === "on",
+    created_by_user_id: userId,
+    modified_by_user_id: userId,
   });
   revalidatePath("/admin/llm-models");
   redirect("/admin/llm-models");
 }
 
 export async function updateLlmModel(id: number, formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("llm_models")
     .update({
@@ -239,6 +248,7 @@ export async function updateLlmModel(id: number, formData: FormData) {
       provider_model_id: formData.get("provider_model_id") as string,
       is_temperature_supported:
         formData.get("is_temperature_supported") === "on",
+      modified_by_user_id: userId,
     })
     .eq("id", id);
   revalidatePath("/admin/llm-models");
@@ -246,7 +256,7 @@ export async function updateLlmModel(id: number, formData: FormData) {
 }
 
 export async function deleteLlmModel(id: number) {
-  const admin = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
   await admin.from("llm_models").delete().eq("id", id);
   revalidatePath("/admin/llm-models");
 }
@@ -254,26 +264,31 @@ export async function deleteLlmModel(id: number) {
 // ── LLM Providers ──────────────────────────────────────
 
 export async function createLlmProvider(formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin.from("llm_providers").insert({
     name: formData.get("name") as string,
+    created_by_user_id: userId,
+    modified_by_user_id: userId,
   });
   revalidatePath("/admin/llm-providers");
   redirect("/admin/llm-providers");
 }
 
 export async function updateLlmProvider(id: number, formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("llm_providers")
-    .update({ name: formData.get("name") as string })
+    .update({
+      name: formData.get("name") as string,
+      modified_by_user_id: userId,
+    })
     .eq("id", id);
   revalidatePath("/admin/llm-providers");
   redirect("/admin/llm-providers");
 }
 
 export async function deleteLlmProvider(id: number) {
-  const admin = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
   await admin.from("llm_providers").delete().eq("id", id);
   revalidatePath("/admin/llm-providers");
 }
@@ -281,9 +296,11 @@ export async function deleteLlmProvider(id: number) {
 // ── Allowed Signup Domains ─────────────────────────────
 
 export async function createAllowedDomain(formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin.from("allowed_signup_domains").insert({
     apex_domain: formData.get("apex_domain") as string,
+    created_by_user_id: userId,
+    modified_by_user_id: userId,
   });
   revalidatePath("/admin/allowed-domains");
   redirect("/admin/allowed-domains");
@@ -293,17 +310,20 @@ export async function updateAllowedDomain(
   id: number,
   formData: FormData
 ) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("allowed_signup_domains")
-    .update({ apex_domain: formData.get("apex_domain") as string })
+    .update({
+      apex_domain: formData.get("apex_domain") as string,
+      modified_by_user_id: userId,
+    })
     .eq("id", id);
   revalidatePath("/admin/allowed-domains");
   redirect("/admin/allowed-domains");
 }
 
 export async function deleteAllowedDomain(id: number) {
-  const admin = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
   await admin.from("allowed_signup_domains").delete().eq("id", id);
   revalidatePath("/admin/allowed-domains");
 }
@@ -311,9 +331,11 @@ export async function deleteAllowedDomain(id: number) {
 // ── Whitelisted Emails ─────────────────────────────────
 
 export async function createWhitelistedEmail(formData: FormData) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin.from("whitelist_email_addresses").insert({
     email_address: formData.get("email_address") as string,
+    created_by_user_id: userId,
+    modified_by_user_id: userId,
   });
   revalidatePath("/admin/whitelisted-emails");
   redirect("/admin/whitelisted-emails");
@@ -323,17 +345,20 @@ export async function updateWhitelistedEmail(
   id: number,
   formData: FormData
 ) {
-  const admin = await requireSuperAdmin();
+  const { admin, userId } = await requireSuperAdmin();
   await admin
     .from("whitelist_email_addresses")
-    .update({ email_address: formData.get("email_address") as string })
+    .update({
+      email_address: formData.get("email_address") as string,
+      modified_by_user_id: userId,
+    })
     .eq("id", id);
   revalidatePath("/admin/whitelisted-emails");
   redirect("/admin/whitelisted-emails");
 }
 
 export async function deleteWhitelistedEmail(id: number) {
-  const admin = await requireSuperAdmin();
+  const { admin } = await requireSuperAdmin();
   await admin.from("whitelist_email_addresses").delete().eq("id", id);
   revalidatePath("/admin/whitelisted-emails");
 }
