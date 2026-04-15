@@ -23,6 +23,17 @@ function getVoteValue(vote: Record<string, unknown>) {
   return null;
 }
 
+type DiscussedCaptionRow = {
+  id: string;
+  content: string | null;
+  like_count: number | null;
+  profiles: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
+};
+
 export default async function CaptionsPage({
   searchParams,
 }: {
@@ -110,10 +121,13 @@ export default async function CaptionsPage({
           "id, content, like_count, profiles:profiles!captions_profile_id_fkey(first_name, last_name, email)"
         )
         .in("id", topDiscussedCaptionIds)
-    : { data: [] as unknown[] };
+    : { data: [] as DiscussedCaptionRow[] };
 
-  const topDiscussedCaptionMap = new Map(
-    (topDiscussedCaptions ?? []).map((caption) => [String(caption.id), caption])
+  const topDiscussedCaptionMap = new Map<string, DiscussedCaptionRow>(
+    (topDiscussedCaptions ?? []).map((caption) => [
+      String(caption.id),
+      caption as DiscussedCaptionRow,
+    ])
   );
   const averageVote = numericVoteCount > 0 ? totalVoteValue / numericVoteCount : 0;
 
@@ -190,13 +204,7 @@ export default async function CaptionsPage({
           <div className="space-y-2">
             {topDiscussedCaptionEntries.length > 0 ? (
               topDiscussedCaptionEntries.map(([captionId, stat], index) => {
-                const caption = topDiscussedCaptionMap.get(captionId) as
-                | {
-                    content: string | null;
-                    like_count: number | null;
-                    profiles: { first_name: string | null; last_name: string | null; email: string | null } | null;
-                  }
-                | undefined;
+                const caption = topDiscussedCaptionMap.get(captionId);
               const profile = caption?.profiles;
               const authorLabel = profile
                 ? `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.email || "Unknown"
